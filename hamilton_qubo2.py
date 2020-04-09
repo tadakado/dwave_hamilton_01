@@ -43,46 +43,31 @@ def report_graph(GS):
         if nin > 1:
             print(pos, ": multiple inputs", ei[en])
 
-def hamilton_qubo(G, cycle=True, lagrange=None):
-
-    # This code is modified from traveling_salesperson_qubo in dwave_networkx
-
-    N = G.number_of_nodes()
+def hamilton_qubo(G, lagrange=None):
+    # This algorithm does not care about path or cycle.
 
     if lagrange is None:
         lagrange = 2
 
-    # Creating the QUBO
     Q = defaultdict(float)
 
-    # Constraint that each row (city) has exactly one 1
-    for node in G:
-        for pos_1 in range(N):
-            Q[((node, pos_1), (node, pos_1))] -= lagrange
-            for pos_2 in range(pos_1+1, N):
-                Q[((node, pos_1), (node, pos_2))] += lagrange
-                Q[((node, pos_2), (node, pos_1))] += lagrange
-                None
+    eo, ei = edgelist(G)
 
-    # Constraint that each col (visit) has exactly one 1
-    for pos in range(N):
-        for node_1 in G:
-            Q[((node_1, pos), (node_1, pos))] -= lagrange
-            for node_2 in set(G)-{node_1}:
-                # QUBO coefficient is 2*lagrange, but we are placing this value 
-                # above *and* below the diagonal, so we put half in each position.
-                Q[((node_1, pos), (node_2, pos))] += lagrange
-                None
+    # Constraint that each node has a outgoing arrow.
+    for fr, tos in eo.items():
+        #print(fr, tos)
+        for to in tos:
+            Q[((fr, to), (fr, to))] -= lagrange
+            for to1, to2 in itertools.combinations(tos, 2):
+                Q[((fr, to1), (fr, to2))] += 2 * lagrange
 
-    # Objective that minimizes distance
-    if cycle:
-        NN = N
-    else:
-        NN = N - 1
-    for u, v in G.edges:
-        for pos in range(NN):
-            nextpos = (pos + 1) % N
-            Q[((u, pos), (v, nextpos))] -= 1
+    # Constraint that each node has an incomming arrow.
+    for to, frs in ei.items():
+        #print(frs, to)
+        for fr in frs:
+            Q[((fr, to), (fr, to))] -= lagrange
+            for fr1, fr2 in itertools.combinations(frs, 2):
+                Q[((fr1, to), (fr2, to))] += 2 * lagrange
 
     return Q
 
@@ -98,9 +83,6 @@ from dwave.system.samplers import DWaveSampler
 from dwave.system.composites import EmbeddingComposite
 from dwave.system import LeapHybridSampler
 
-#cycle = True
-cycle = False
-
 in_file = '18_H.txt'
 out_file = '18_H.png'
 # Graph data to be used : 0 .. 
@@ -108,13 +90,7 @@ idx_data = 2
 
 G = read_bigraph(in_file, idx_data)
 
-N = G.number_of_nodes()
-if cycle:
-    NN = N
-else:
-    NN = N - 1
-
-Q = hamilton_qubo(G, cycle)
+Q = hamilton_qubo(G)
 
 bqm = dimod.BinaryQuadraticModel(Q, 'BINARY')
 
@@ -130,18 +106,10 @@ sampleset = sampler.sample(bqm)
 
 #print(sampleset.first)
 
-route = defaultdict(list)
-for (u, t), d in sampleset.first.sample.items():
-    if d == 1:
-        route[t] += [u]
-
-#print(dict(route))
-
 edges = list(G.edges)
 GS = nx.DiGraph()
-for pos in range(NN):
-    nextpos = (pos + 1) % N
-    for u, v in itertools.product(route[pos], route[nextpos]):
+for (u, v), d in sampleset.first.sample.items():
+    if d == 1:
         if (u, v) in edges:
             GS.add_edge(u, v)
         else:
