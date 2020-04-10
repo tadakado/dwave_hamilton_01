@@ -118,7 +118,8 @@ for (u, v), d in sampleset.first.sample.items():
 report_graph(GS)
 
 #pos = nx.spring_layout(G)
-pos = nx.circular_layout(G)
+#pos = nx.circular_layout(G)
+pos = nx.kamada_kawai_layout(G)
 
 plt.figure()
 nx.draw_networkx(G,  pos=pos, with_labels=True)
