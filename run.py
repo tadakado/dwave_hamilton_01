@@ -1,0 +1,95 @@
+# Copyright (c) 2020 Tadashi Kadowaki.
+#
+# example code for hp_qubo
+#
+
+import matplotlib
+matplotlib.use("agg")
+import matplotlib.pyplot as plt
+
+import dimod
+from neal import SimulatedAnnealingSampler
+from tabu import TabuSampler
+from dwave.system.samplers import DWaveSampler
+from dwave.system.composites import EmbeddingComposite
+from dwave.system import LeapHybridSampler
+
+from hp_qubo import *
+
+lagrange = 5
+
+#opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
+#opts = {'in_file': {'file': 'examples/0012_2.txt'}, 'plot': {'file': 'examples/0012_2.png'}}
+#opts = {'in_file': {'file': 'examples/0100_1.txt'}, 'out_file': {'results': 'examples/0100_1_out.txt'}}
+#opts = {'in_file': {'file': 'examples/0100_2.txt'}, 'out_file': {'results': 'examples/0100_2_out.txt'}}
+opts = {'in_file': {'file': 'examples/1000_1.txt'}, 'out_file': {'results': 'examples/1000_1_out.txt'}}
+#opts = {'in_file': {'file': 'examples/1000_2.txt'}, 'out_file': {'results': 'examples/1000_2_out.txt'}}
+#opts = {'in_file': {'file': 'examples/DRB1-3123.gfa'}, 'out_file': {'results': 'examples/DRB1-3123_out.txt'}}
+#opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
+#opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
+#opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
+#opts = {'generate': {'type': 'acyclic', 'n': 12, 'a': 2}, 'out_file': {'problem': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
+#opts = {'generate': {'type': 'acyclic', 'n': 12, 'a': 2}, 'out_file': {'problem': 'examples/0012_2.txt'}, 'plot': {'file': 'examples/0012_2.png'}}
+#opts = {'generate': {'type': 'acyclic', 'n': 100, 'a': 2}, 'out_file': {'problem': 'examples/0100_1.txt', 'results': 'examples/0100_1_out.txt'}}
+#opts = {'generate': {'type': 'acyclic', 'n': 100, 'a': 5}, 'out_file': {'problem': 'examples/0100_2.txt', 'results': 'examples/0100_2_out.txt'}}
+#opts = {'generate': {'type': 'acyclic', 'n': 1000, 'a': 2}, 'out_file': {'problem': 'examples/1000_1.txt', 'results': 'examples/1000_1_out.txt'}}
+#opts = {'generate': {'type': 'acyclic', 'n': 1000, 'a': 5}, 'out_file': {'problem': 'examples/1000_2.txt', 'results': 'examples/1000_2_out.txt'}}
+
+# Read or generage a graph
+if 'in_file' in opts:
+    G = read_graph(**opts['in_file'])
+elif 'generate' in opts:
+    G = generate_graph(**opts['generate'])
+else:
+    print('Input data is not specified.')
+    raise
+
+# Generate QUBO
+Q, offset, b, f1 = hamilton_qubo(G, lagrange)
+bqm = dimod.BinaryQuadraticModel(Q, 'BINARY')
+
+# Fix variables
+bqm.fix_variables(f1)
+f2 = dimod.fix_variables(bqm)
+bqm.fix_variables(f2)
+f = {**f1, **f2}
+
+print('# of nodes, edges, variables, fixed 1, 2 & total, energy, node with no inedge, multi inedges, no outedges, multi outedges')
+print(G.number_of_nodes(), G.number_of_edges(), bqm.num_variables, len(f1), len(f2), len(f), end=' ')
+
+# Choose one of the solvers below.
+#sampler = SimulatedAnnealingSampler()
+#sampler = TabuSampler()
+#sampler = EmbeddingComposite(DWaveSampler(solver={'qpu': True, 'postprocess': 'sampling'}))
+sampler = LeapHybridSampler()
+
+# Conduct optimization
+sampleset = sampler.sample(bqm)
+
+print(sampleset.first.energy, end=' ')
+
+# Summarize the results on the graph
+GS = sample_graph(G, b, f, sampleset.first.sample)
+
+# Report violations
+rep = report_graph(GS, G)
+
+print(' '.join(str(x) for x in rep))
+
+if 'out_file' in opts:
+    if 'problem' in opts['out_file']:
+        with open(opts['out_file']['problem'], 'w') as f:
+            for e in G.edges:
+                f.write("%d %d\n" % e)
+    if 'results' in opts['out_file']:
+        with open(opts['out_file']['results'], 'w') as f:
+            for e in sorted(GS.edges):
+                f.write("%d %d\n" % e)
+
+if 'plot' in opts:
+    # pos = nx.spring_layout(sorted(G.noeds))
+    pos = nx.circular_layout(sorted(G.nodes))
+    plt.figure()
+    nx.draw_networkx(G,  pos=pos, with_labels=True)
+    nx.draw_networkx(GS, pos=pos, with_labels=True, edge_color='r')
+    plt.savefig(opts['plot']['file'], bbox_inches='tight')
