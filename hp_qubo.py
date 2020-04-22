@@ -38,6 +38,7 @@ def read_graph(file, **kwargs):
     # elif ...:
     #     return read_gfa_path(file, **kwargs)
 
+## fix me
 def read_gfa_link(file, verbose=False):
     G = nx.DiGraph()
     with open(file) as f:
@@ -58,6 +59,7 @@ def read_gfa_link(file, verbose=False):
             G.add_edge(u, v)
     return G
 
+## fix me
 def read_gfa_path(file, verbose=False, shrink=True):
     GG = []
     with open(file) as f:
@@ -70,13 +72,17 @@ def read_gfa_path(file, verbose=False, shrink=True):
             G = nx.DiGraph()
             u = None
             for v in path.split(','):
+                o = v[-1]
                 v = int(v[:-1])
                 if u:
                     if u == v:
                         if verbose:
                             print('selfloop', u, v)
                     else:
-                        G.add_edge(u, v)
+                        if o == '-':
+                            G.add_edge(v, u)
+                        else:
+                            G.add_edge(u, v)
                 u = v
             GG += [G]
     if shrink:
@@ -97,6 +103,7 @@ def read_txt(file):
             G.add_edge(u, v)
     return G
 
+## fix me
 def report_graph(GS, G, verbose=False):
     out = [0, 0, 0, 0]
     for u in GS.nodes:
@@ -123,6 +130,7 @@ def report_graph(GS, G, verbose=False):
                 print(v, ": multiple inputs", list(GS.predecessors(v)))
     return out
 
+## fix me
 def hamilton_qubo(G, lagrange=None):
     # This algorithm does not care about path or cycle.
     # Outputs
@@ -198,6 +206,7 @@ def hamilton_qubo(G, lagrange=None):
 
     return Q, offset, b, f
 
+## fix me
 def sample_graph(G, b, f, sample):
     edges = list(G.edges)
     b = dict(zip(b.values(), b.keys()))
