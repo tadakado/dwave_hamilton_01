@@ -30,15 +30,26 @@ def generate_acyclic_graph(n=100, a=2):
         G.add_edge(u, v)
     return G
 
+def rev(u, v):
+    return (v[0], '-' if v[1] == '+' else '+'), (u[0], '-' if u[1] == '+' else '+')
+
+def simplify_gfa_graph(G):
+    GS = nx.DiGraph()
+    for u, v in G.edges:
+        if (u[1] == '-' and v[1] == '-'):
+            u, v = rev(u, v)
+        GS.add_edge(u, v)
+    return GS
+
 def read_graph(file, **kwargs):
     if file[-4:].upper() == '.GFA':
-        return read_gfa_link(file, **kwargs)
+        G = read_gfa_link(file, **kwargs)
+        return simplify_gfa_graph(G)
     elif file[-4:].upper() == '.TXT':
         return read_txt(file, **kwargs)
     # elif ...:
     #     return read_gfa_path(file, **kwargs)
 
-## fix me
 def read_gfa_link(file, verbose=False):
     G = nx.DiGraph()
     with open(file) as f:
@@ -46,8 +57,8 @@ def read_gfa_link(file, verbose=False):
         for row in reader:
             if row[0] != 'L':
                 continue
-            u = int(row[1])
-            v = int(row[3])
+            u = (int(row[1]), row[2])
+            v = (int(row[3]), row[4])
             if u == v:
                 if verbose:
                     print("ignore self loop:", u, v)
@@ -57,9 +68,9 @@ def read_gfa_link(file, verbose=False):
                     print("ignore duplicated edge:", u, v)
                 continue
             G.add_edge(u, v)
+    G = simplify_gfa_graph(G)
     return G
 
-## fix me
 def read_gfa_path(file, verbose=False, shrink=True):
     GG = []
     with open(file) as f:
@@ -72,18 +83,15 @@ def read_gfa_path(file, verbose=False, shrink=True):
             G = nx.DiGraph()
             u = None
             for v in path.split(','):
-                o = v[-1]
-                v = int(v[:-1])
+                v = (int(v[:-1]), v[-1])
                 if u:
-                    if u == v:
+                    if u[0] == v[0]:
                         if verbose:
                             print('selfloop', u, v)
                     else:
-                        if o == '-':
-                            G.add_edge(v, u)
-                        else:
                             G.add_edge(u, v)
                 u = v
+            G = simplify_gfa_graph(G)
             GG += [G]
     if shrink:
         edges = []
@@ -103,7 +111,6 @@ def read_txt(file):
             G.add_edge(u, v)
     return G
 
-## fix me
 def report_graph(GS, G, verbose=False):
     out = [0, 0, 0, 0]
     for u in GS.nodes:
@@ -130,8 +137,7 @@ def report_graph(GS, G, verbose=False):
                 print(v, ": multiple inputs", list(GS.predecessors(v)))
     return out
 
-## fix me
-def hamilton_qubo(G, lagrange=None):
+def hamilton_qubo(G, lagrange=None, fix_variables=True):
     # This algorithm does not care about path or cycle.
     # Outputs
     #   Q     : QUBO
@@ -147,6 +153,9 @@ def hamilton_qubo(G, lagrange=None):
     b = {}
     f = {}
 
+    # FixMe reduce_variables does not work with fix_variavles & does not test enough.
+    reduce_variables = not fix_variables
+
     for u in G:
         vv = list(set(G.successors(u)) - {u})
         if len(vv) == 2:
@@ -156,11 +165,14 @@ def hamilton_qubo(G, lagrange=None):
     # Constraint (outedges)
     for u in G:
         vv = sorted(set(G.successors(u)) - {u})
-        if len(vv) == 0 or len(vv) == 2:
+        if len(vv) == 0:
             continue
-        if len(vv) == 1:
+        if len(vv) == 1 and fix_variables:
             v = vv[0]
             f[(u, v)] = 1
+        if len(vv) == 2 and reduce_variables:
+            offset -= 1
+            continue
         x = [None] * len(vv)
         for i, v in enumerate(vv):
             x[i] = (u, v)
@@ -182,15 +194,14 @@ def hamilton_qubo(G, lagrange=None):
         x = [None] * len(uu)
         n = 0
         for i, u in enumerate(uu):
-            if (u, v) in b:
-                #print(u,v,'--')
+            if ((u, v) in b) and reduce_variables:
                 sign[i] = -1
                 x[i] = b[(u, v)]
                 n += 1
             else:
                 sign[i] = 1
                 x[i] = (u, v)
-        if len(uu) == 1:
+        if len(uu) == 1 and fix_variables:
             if sign[0] == -1:
                 f[x[0]] = 0
             else:
@@ -206,7 +217,6 @@ def hamilton_qubo(G, lagrange=None):
 
     return Q, offset, b, f
 
-## fix me
 def sample_graph(G, b, f, sample):
     edges = list(G.edges)
     b = dict(zip(b.values(), b.keys()))

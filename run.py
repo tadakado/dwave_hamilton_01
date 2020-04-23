@@ -22,9 +22,8 @@ lagrange = 5
 #opts = {'in_file': {'file': 'examples/0012_2.txt'}, 'plot': {'file': 'examples/0012_2.png'}}
 #opts = {'in_file': {'file': 'examples/0100_1.txt'}, 'out_file': {'results': 'examples/0100_1_out.txt'}}
 #opts = {'in_file': {'file': 'examples/0100_2.txt'}, 'out_file': {'results': 'examples/0100_2_out.txt'}}
-opts = {'in_file': {'file': 'examples/1000_1.txt'}, 'out_file': {'results': 'examples/1000_1_out.txt'}}
+#opts = {'in_file': {'file': 'examples/1000_1.txt'}, 'out_file': {'results': 'examples/1000_1_out.txt'}}
 #opts = {'in_file': {'file': 'examples/1000_2.txt'}, 'out_file': {'results': 'examples/1000_2_out.txt'}}
-#opts = {'in_file': {'file': 'examples/DRB1-3123.gfa'}, 'out_file': {'results': 'examples/DRB1-3123_out.txt'}}
 #opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
 #opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
 #opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
@@ -34,6 +33,7 @@ opts = {'in_file': {'file': 'examples/1000_1.txt'}, 'out_file': {'results': 'exa
 #opts = {'generate': {'type': 'acyclic', 'n': 100, 'a': 5}, 'out_file': {'problem': 'examples/0100_2.txt', 'results': 'examples/0100_2_out.txt'}}
 #opts = {'generate': {'type': 'acyclic', 'n': 1000, 'a': 2}, 'out_file': {'problem': 'examples/1000_1.txt', 'results': 'examples/1000_1_out.txt'}}
 #opts = {'generate': {'type': 'acyclic', 'n': 1000, 'a': 5}, 'out_file': {'problem': 'examples/1000_2.txt', 'results': 'examples/1000_2_out.txt'}}
+opts = {'in_file': {'file': 'examples/DRB1-3123.gfa'}, 'out_file': {'results': 'examples/DRB1-3123_out.txt', 'nodes': 'examples/DRB1-3123_nodes.txt'}}
 
 # Read or generage a graph
 if 'in_file' in opts:
@@ -45,7 +45,7 @@ else:
     raise
 
 # Generate QUBO
-Q, offset, b, f1 = hamilton_qubo(G, lagrange)
+Q, offset, b, f1 = hamilton_qubo(G, lagrange, True)
 bqm = dimod.BinaryQuadraticModel(Q, 'BINARY')
 
 # Fix variables
@@ -79,12 +79,33 @@ print(' '.join(str(x) for x in rep))
 if 'out_file' in opts:
     if 'problem' in opts['out_file']:
         with open(opts['out_file']['problem'], 'w') as f:
-            for e in G.edges:
-                f.write("%d %d\n" % e)
+            for u, v in G.edges:
+                if isinstance(u, list):
+                    u = ''.join(str(x) for x in u)
+                if isinstance(v, list):
+                    v = ''.join(str(x) for x in v)
+                f.write("%s %s\n" % (str(u), str(v)))
     if 'results' in opts['out_file']:
         with open(opts['out_file']['results'], 'w') as f:
-            for e in sorted(GS.edges):
-                f.write("%d %d\n" % e)
+            for u, v in sorted(GS.edges):
+                if isinstance(u, tuple):
+                    u = ''.join(str(x) for x in u)
+                if isinstance(v, tuple):
+                    v = ''.join(str(x) for x in v)
+                f.write("%s %s\n" % (str(u), str(v)))
+    if 'nodes' in opts['out_file']:
+        GX = GS.copy()
+        while True:
+            try:
+                es = sorted(nx.algorithms.cycles.find_cycle(GX))
+                GX.remove_edge(*es[-1])
+            except:
+                break
+        with open(opts['out_file']['nodes'], 'w') as f:
+            for n in nx.algorithms.dag.topological_sort(GX):
+                if isinstance(n, tuple):
+                    n = ''.join(str(x) for x in n)
+                f.write("%s\n" % str(n))
 
 if 'plot' in opts:
     # pos = nx.spring_layout(sorted(G.noeds))
