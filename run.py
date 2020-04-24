@@ -16,8 +16,6 @@ from dwave.system import LeapHybridSampler
 
 from hp_qubo import *
 
-lagrange = 5
-
 #opts = {'in_file': {'file': 'examples/0012_1.txt'}, 'plot': {'file': 'examples/0012_1.png'}}
 #opts = {'in_file': {'file': 'examples/0012_2.txt'}, 'plot': {'file': 'examples/0012_2.png'}}
 #opts = {'in_file': {'file': 'examples/0100_1.txt'}, 'out_file': {'results': 'examples/0100_1_out.txt'}}
@@ -45,23 +43,24 @@ else:
     raise
 
 # Generate QUBO
-Q, offset, b, f1 = hamilton_qubo(G, lagrange, True)
+Q, offset, b, f1 = hamilton_qubo(G, False, True)
 bqm = dimod.BinaryQuadraticModel(Q, 'BINARY')
+bqm.offset = offset
 
 # Fix variables
 bqm.fix_variables(f1)
 f2 = dimod.fix_variables(bqm)
 bqm.fix_variables(f2)
-f = {**f1, **f2}
+f0 = {**f1, **f2}
 
 print('# of nodes, edges, variables, fixed 1, 2 & total, energy, node with no inedge, multi inedges, no outedges, multi outedges')
 print(G.number_of_nodes(), G.number_of_edges(), bqm.num_variables, len(f1), len(f2), len(f), end=' ')
 
 # Choose one of the solvers below.
 #sampler = SimulatedAnnealingSampler()
-#sampler = TabuSampler()
+sampler = TabuSampler()
 #sampler = EmbeddingComposite(DWaveSampler(solver={'qpu': True, 'postprocess': 'sampling'}))
-sampler = LeapHybridSampler()
+#sampler = LeapHybridSampler()
 
 # Conduct optimization
 sampleset = sampler.sample(bqm)
@@ -69,13 +68,14 @@ sampleset = sampler.sample(bqm)
 print(sampleset.first.energy, end=' ')
 
 # Summarize the results on the graph
-GS = sample_graph(G, b, f, sampleset.first.sample)
+GS = sample_graph(G, b, f0, sampleset.first.sample)
 
 # Report violations
 rep = report_graph(GS, G)
 
 print(' '.join(str(x) for x in rep))
 
+# output
 if 'out_file' in opts:
     if 'problem' in opts['out_file']:
         with open(opts['out_file']['problem'], 'w') as f:
@@ -107,6 +107,7 @@ if 'out_file' in opts:
                     n = ''.join(str(x) for x in n)
                 f.write("%s\n" % str(n))
 
+# plot
 if 'plot' in opts:
     # pos = nx.spring_layout(sorted(G.noeds))
     pos = nx.circular_layout(sorted(G.nodes))

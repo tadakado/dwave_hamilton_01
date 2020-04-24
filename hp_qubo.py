@@ -137,24 +137,25 @@ def report_graph(GS, G, verbose=False):
                 print(v, ": multiple inputs", list(GS.predecessors(v)))
     return out
 
-def hamilton_qubo(G, lagrange=None, fix_variables=True):
+def hamilton_qubo(G, fix_var=True, reduce_var=False):
     # This algorithm does not care about path or cycle.
+    # Inputs
+    #   G          : directed graph
+    #   fix_var    : fix variables (single edge node)
+    #   reduce_var : reduce variables (1 bit encoding for double edge node)
     # Outputs
     #   Q     : QUBO
     #   offset: offset
     #   b     : binary variables
     #   f     : fixed variables
-
-    if lagrange is None:
-        lagrange = 2
+    # [FixMe] reduce_var does not work with fix_var
 
     Q = defaultdict(float)
     offset = 0
     b = {}
     f = {}
 
-    # FixMe reduce_variables does not work with fix_variavles & does not test enough.
-    reduce_variables = not fix_variables
+    lagrange = 1
 
     for u in G:
         vv = list(set(G.successors(u)) - {u})
@@ -167,11 +168,10 @@ def hamilton_qubo(G, lagrange=None, fix_variables=True):
         vv = sorted(set(G.successors(u)) - {u})
         if len(vv) == 0:
             continue
-        if len(vv) == 1 and fix_variables:
+        if len(vv) == 1 and fix_var:
             v = vv[0]
             f[(u, v)] = 1
-        if len(vv) == 2 and reduce_variables:
-            offset -= 1
+        if len(vv) == 2 and reduce_var:
             continue
         x = [None] * len(vv)
         for i, v in enumerate(vv):
@@ -179,11 +179,11 @@ def hamilton_qubo(G, lagrange=None, fix_variables=True):
         for i in range(len(x)):
             Q[(x[i], x[i])] += - lagrange
         for i, j in combinations(range(len(x)), 2):
-            if x[i] == x[j]:
-                print("Duplicated!!!", x[i], x[j])
-                raise
+            # if x[i] == x[j]:
+            #     print("Duplicated!!!", x[i], x[j])
+            #     raise
             Q[(x[i], x[j])] += 2 * lagrange
-        offset += 1
+        offset += lagrange
 
     # Constraint (inedges)
     for v in G:
@@ -194,14 +194,14 @@ def hamilton_qubo(G, lagrange=None, fix_variables=True):
         x = [None] * len(uu)
         n = 0
         for i, u in enumerate(uu):
-            if ((u, v) in b) and reduce_variables:
+            if ((u, v) in b) and reduce_var:
                 sign[i] = -1
                 x[i] = b[(u, v)]
                 n += 1
             else:
                 sign[i] = 1
                 x[i] = (u, v)
-        if len(uu) == 1 and fix_variables:
+        if len(uu) == 1 and fix_var:
             if sign[0] == -1:
                 f[x[0]] = 0
             else:
@@ -209,11 +209,11 @@ def hamilton_qubo(G, lagrange=None, fix_variables=True):
         for i in range(len(x)):
             Q[(x[i], x[i])] += (1 + 2*(n-1)*sign[i]) * lagrange
         for i, j in combinations(range(len(x)), 2):
-            if x[i] == x[j]:
-                print("Duplicated!!!", x[i], x[j])
-                raise
+            # if x[i] == x[j]:
+            #     print("Duplicated!!!", x[i], x[j])
+            #     raise
             Q[(x[i], x[j])] += 2 * sign[i] * sign[j] * lagrange
-        offset += n * n - 2 * n + 1
+        offset += (n * n - 2 * n + 1) * lagrange
 
     return Q, offset, b, f
 
