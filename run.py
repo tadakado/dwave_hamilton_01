@@ -42,6 +42,9 @@ else:
     print('Input data is not specified.')
     raise
 
+for e in nx.selfloop_edges(G):
+    G.remove_edge(*e)
+
 # Generate QUBO
 Q, offset, b, f1 = hamilton_qubo(G, False, True)
 bqm = dimod.BinaryQuadraticModel(Q, 'BINARY')

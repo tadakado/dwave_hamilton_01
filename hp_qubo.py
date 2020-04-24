@@ -158,14 +158,14 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
     lagrange = 1
 
     for u in G:
-        vv = list(set(G.successors(u)) - {u})
+        vv = G.successors(u)
         if len(vv) == 2:
             vv = sorted(vv)
             b[(u, vv[1])] = (u, vv[0])
 
     # Constraint (outedges)
     for u in G:
-        vv = sorted(set(G.successors(u)) - {u})
+        vv = G.successors(u)
         if len(vv) == 0:
             continue
         if len(vv) == 1 and fix_var:
@@ -179,15 +179,12 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
         for i in range(len(x)):
             Q[(x[i], x[i])] += - lagrange
         for i, j in combinations(range(len(x)), 2):
-            # if x[i] == x[j]:
-            #     print("Duplicated!!!", x[i], x[j])
-            #     raise
             Q[(x[i], x[j])] += 2 * lagrange
         offset += lagrange
 
     # Constraint (inedges)
     for v in G:
-        uu = sorted(set(G.predecessors(v)) - {v})
+        uu = G.predecessors(v)
         if len(uu) == 0:
             continue
         sign = [1] * len(uu)
@@ -209,9 +206,6 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
         for i in range(len(x)):
             Q[(x[i], x[i])] += (1 + 2*(n-1)*sign[i]) * lagrange
         for i, j in combinations(range(len(x)), 2):
-            # if x[i] == x[j]:
-            #     print("Duplicated!!!", x[i], x[j])
-            #     raise
             Q[(x[i], x[j])] += 2 * sign[i] * sign[j] * lagrange
         offset += (n * n - 2 * n + 1) * lagrange
 
