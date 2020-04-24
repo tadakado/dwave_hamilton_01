@@ -102,7 +102,7 @@ if 'out_file' in opts:
             except:
                 break
         with open(opts['out_file']['nodes'], 'w') as f:
-            for n in nx.algorithms.dag.topological_sort(GX):
+            for n in nx.algorithms.dag.lexicographical_topological_sort(GX):
                 if isinstance(n, tuple):
                     n = ''.join(str(x) for x in n)
                 f.write("%s\n" % str(n))
