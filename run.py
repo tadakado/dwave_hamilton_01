@@ -46,7 +46,7 @@ for e in nx.selfloop_edges(G):
     G.remove_edge(*e)
 
 # Generate QUBO
-Q, offset, b, f1 = hamilton_qubo(G, False, True)
+Q, offset, b, f1 = hamilton_qubo(G, True, False)
 bqm = dimod.BinaryQuadraticModel(Q, 'BINARY')
 bqm.offset = offset
 
@@ -56,8 +56,8 @@ f2 = dimod.fix_variables(bqm)
 bqm.fix_variables(f2)
 f0 = {**f1, **f2}
 
-print('# of nodes, edges, variables, fixed 1, 2 & total, energy, node with no inedge, multi inedges, no outedges, multi outedges')
-print(G.number_of_nodes(), G.number_of_edges(), bqm.num_variables, len(f1), len(f2), len(f), end=' ')
+print('# of nodes, edges, variables, fixed 1, 2 & total, energy, node with no inedge, multi inedges, no outedges, multi outedges, cycles')
+print(G.number_of_nodes(), G.number_of_edges(), bqm.num_variables, len(f1), len(f2), len(f0), end=' ')
 
 # Choose one of the solvers below.
 #sampler = SimulatedAnnealingSampler()
@@ -76,7 +76,10 @@ GS = sample_graph(G, b, f0, sampleset.first.sample)
 # Report violations
 rep = report_graph(GS, G)
 
-print(' '.join(str(x) for x in rep))
+print(' '.join(str(x) for x in rep), end=' ')
+
+# Report cycles
+print(len(list(nx.simple_cycles(GS))))
 
 # output
 if 'out_file' in opts:

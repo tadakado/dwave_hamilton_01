@@ -158,14 +158,14 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
     lagrange = 1
 
     for u in G:
-        vv = G.successors(u)
+        vv = list(G.successors(u))
         if len(vv) == 2:
             vv = sorted(vv)
             b[(u, vv[1])] = (u, vv[0])
 
     # Constraint (outedges)
     for u in G:
-        vv = G.successors(u)
+        vv = list(G.successors(u))
         if len(vv) == 0:
             continue
         if len(vv) == 1 and fix_var:
@@ -184,7 +184,7 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
 
     # Constraint (inedges)
     for v in G:
-        uu = G.predecessors(v)
+        uu = list(G.predecessors(v))
         if len(uu) == 0:
             continue
         sign = [1] * len(uu)
@@ -227,3 +227,9 @@ def sample_graph(G, b, f, sample):
         if d == 1:
             GS.add_edge(*e)
     return GS
+
+def reverse_graph(G):
+    GR = nx.DiGraph()
+    for u, v in G.edges:
+        GR.add_edge(v, u)
+    return GR
