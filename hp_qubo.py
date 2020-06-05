@@ -152,7 +152,7 @@ def hamilton_qubo(G, lagrange=1, fix_var=False, reduce_var=False, relax=False, e
     #   reduce_var : reduce variables (1 bit encoding for double edge node)
     #   relax      : additional cost term to relax the HP constraint
     #   elongation : additional cost term to elongate a path
-    #   weight     : additonal cost term use weight to prioritize edges
+    #   weight     : additonal cost term to prioritize edges
     # Outputs
     #   Q     : QUBO
     #   offset: offset
