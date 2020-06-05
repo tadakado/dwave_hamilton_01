@@ -4,7 +4,7 @@
 #
 
 import csv
-from itertools import combinations
+from itertools import combinations, product
 import networkx as nx
 from collections import defaultdict
 from random import choices, randint
@@ -71,7 +71,7 @@ def read_gfa_link(file, verbose=False):
     G = simplify_gfa_graph(G)
     return G
 
-def read_gfa_path(file, verbose=False, shrink=True):
+def read_gfa_path(file, verbose=False, shrink=True, weight=True):
     GG = []
     with open(file) as f:
         reader = csv.reader(f, delimiter="\t")
@@ -94,10 +94,17 @@ def read_gfa_path(file, verbose=False, shrink=True):
             G = simplify_gfa_graph(G)
             GG += [G]
     if shrink:
-        edges = []
-        for G in GG:
-            edges += list(G.edges)
-        GG = nx.DiGraph(sorted(list(set(edges))))
+        if weight:
+            edges = {}
+            for G in GG:
+                for e in G.edges:
+                    edges[e] = edges.get(e, 0) + 1
+            GG = nx.DiGraph([[*e, {'weight': a}] for e, a in edges.items()])
+        else:
+            edges = []
+            for G in GG:
+                edges += list(G.edges)
+            GG = nx.DiGraph(sorted(list(set(edges))))
     return GG
 
 def read_txt(file):
@@ -113,8 +120,9 @@ def read_txt(file):
 
 def report_graph(GS, G, verbose=False):
     out = [0, 0, 0, 0]
-    for u in GS.nodes:
-        n_gs_out = len(set(GS.successors(u)) - {u})
+    for u in G:
+        v = u
+        n_gs_out = len(set(GS.successors(u)) - {u}) if u in GS else 0
         n_g_out = len(set(G.successors(u)) - {u})
         if n_gs_out == 0 and n_g_out != 0:
             out[0] += 1
@@ -124,8 +132,7 @@ def report_graph(GS, G, verbose=False):
             out[1] += 1
             if verbose:
                 print(u, ": multiple outputs", list(GS.successors(u)))
-    for v in GS.nodes:
-        n_gs_in = len(set(GS.predecessors(v)) - {v})
+        n_gs_in = len(set(GS.predecessors(v)) - {v}) if v in GS else 0
         n_g_in = len(set(G.predecessors(v)) - {v})
         if n_gs_in == 0 and n_g_in != 0:
             out[2] += 1
@@ -137,12 +144,15 @@ def report_graph(GS, G, verbose=False):
                 print(v, ": multiple inputs", list(GS.predecessors(v)))
     return out
 
-def hamilton_qubo(G, fix_var=True, reduce_var=False):
+def hamilton_qubo(G, lagrange=1, fix_var=False, reduce_var=False, relax=False, elongation=False, weight=False):
     # This algorithm does not care about path or cycle.
     # Inputs
     #   G          : directed graph
     #   fix_var    : fix variables (single edge node)
     #   reduce_var : reduce variables (1 bit encoding for double edge node)
+    #   relax      : additional cost term to relax the HP constraint
+    #   elongation : additional cost term to elongate a path
+    #   weight     : additonal cost term use weight to prioritize edges
     # Outputs
     #   Q     : QUBO
     #   offset: offset
@@ -150,12 +160,13 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
     #   f     : fixed variables
     # [FixMe] reduce_var does not work with fix_var
 
+    if fix_var and reduce_var:
+        raise ValueError("fix_var and reduce_var do not work together")
+
     Q = defaultdict(float)
     offset = 0
     b = {}
     f = {}
-
-    lagrange = 1
 
     for u in G:
         vv = list(G.successors(u))
@@ -203,11 +214,46 @@ def hamilton_qubo(G, fix_var=True, reduce_var=False):
                 f[x[0]] = 0
             else:
                 f[x[0]] = 1
-        for i in range(len(x)):
-            Q[(x[i], x[i])] += (1 + 2*(n-1)*sign[i]) * lagrange
+        if not relax:
+            for i in range(len(x)):
+                Q[(x[i], x[i])] += (1 + 2*(n-1)*sign[i]) * lagrange
         for i, j in combinations(range(len(x)), 2):
             Q[(x[i], x[j])] += 2 * sign[i] * sign[j] * lagrange
         offset += (n * n - 2 * n + 1) * lagrange
+
+    # Elongation
+    if elongation:
+        for v in G:
+            u = v
+            vv = G.successors(u)
+            uu = G.predecessors(v)
+            for u0, v0 in product(uu, vv):
+                sign = 1
+                if ((u0, v) in b) and reduce_var:
+                    x = b[(u0, v)]
+                    sign *= -1
+                else:
+                    x = (u0, v)
+                if ((u, v0) in b) and reduce_var:
+                    y = b[(u, v0)]
+                    sign *= -1
+                else:
+                    y = (u, v0)
+                Q[x, y] -= sign
+
+    # Cost
+    ww = [w for u, v, w in G.edges(data='weight') if w is not None]
+    if weight and len(ww) > 0:
+        gnf = max(ww) * 2
+        for u, v, w in G.edges(data='weight'):
+            if ((u, v) in f) and fix_var:
+                continue
+            elif ((u, v) in b) and reduce_var:
+                x = b[(u, v)]
+                w = -w
+            else:
+                x = (u, v)
+            Q[(x, x)] -= w / gnf
 
     return Q, offset, b, f
 
